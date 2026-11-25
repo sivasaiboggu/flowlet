@@ -1,0 +1,1 @@
+{"description":"Flowlet — a mini webhook automation service (Bun backend + Next.js frontend).","name":"flowlet","private":true,"scripts":{"dev":"sh scripts/dev.sh","migrate":"bun --cwd backend db:migrate","test":"bun --cwd backend test","typecheck":"bun --cwd backend typecheck && bun --cwd frontend typecheck"},"version":"0.1.0","workspaces":["backend","frontend"]}
