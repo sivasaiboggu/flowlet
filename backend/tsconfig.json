@@ -1,0 +1,1 @@
+{"compilerOptions":{"forceConsistentCasingInFileNames":true,"lib":["ESNext"],"module":"ESNext","moduleResolution":"bundler","skipLibCheck":true,"strict":true,"target":"ESNext"},"include":["src","test"]}

@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# Build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Environment and secrets — never commit real values
+.env
+.env.local
+.env.*.local
+
+# Local dev data (project-local Postgres / Mongo data dirs)
+.dev/
+
+# Local-only copy of the take-home brief — not part of the submission
+BRIEF.md
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp

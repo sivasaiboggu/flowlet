@@ -1,0 +1,40 @@
+# Flowlet — databases only.
+#
+# This file starts MongoDB and PostgreSQL for local development and for
+# reviewers. It deliberately does NOT start the app itself: the brief
+# defines the exact run commands, and those take precedence once read.
+# Until then, run the backend and frontend from their own READMEs
+# (backend: `bun run dev`, frontend: `bun run dev`).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: flowlet
+      POSTGRES_PASSWORD: CHANGE_ME
+      POSTGRES_DB: flowlet_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - flowlet_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowlet -d flowlet_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mongo:
+    image: mongo:8
+    ports:
+      - "27017:27017"
+    volumes:
+      - flowlet_mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  flowlet_pgdata:
+  flowlet_mongodata:

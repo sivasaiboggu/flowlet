@@ -1,0 +1,222 @@
+# Flowlet
+
+A mini webhook automation service. A user creates a flow with a few
+steps, an external system sends an event to the flow's webhook URL, and
+the service runs the steps in order and records the result as a run.
+
+Built for the Octaviaflow Full Stack Developer Intern take-home
+(deadline: Thu 26 Nov 2026, 20:00 IST).
+
+## How to run
+
+From a fresh clone, exactly as the brief specifies:
+
+```bash
+cp .env.example .env
+docker compose up -d   # MongoDB and PostgreSQL
+bun install
+bun run migrate
+bun run dev            # backend on http://localhost:4000, web on http://localhost:3000
+bun test
+```
+
+`bun run dev` starts both servers (backend with watch mode). Stop with
+Ctrl-C. The backend also answers `GET /health` and `GET /health/db`
+(the second checks both databases and returns 503 if either is down).
+
+`.env.example` holds placeholders only. Never commit `.env`.
+
+## How the code is organised
+
+```
+flowlet/
+├── backend/            Bun + TypeScript, no framework.
+│   ├── src/index.ts    Entrypoint: serves, logs, shuts pools down cleanly.
+│   ├── src/app.ts      Route table + request handler (testable without a port).
+│   ├── src/config.ts   Environment only; a missing value fails fast by name.
+│   ├── src/types.ts    Shared types (Flow, Run, Stats). No `any`.
+│   ├── src/validation.ts  Runtime validation of every request body,
+│   │                    with field-path errors (e.g. steps.0.field).
+│   ├── src/engine.ts   Step execution: dot-path reads, the five filter
+│   │                    operators, transform mapping, http_request with a
+│   │                    5s timeout, and HMAC sign/verify (timing-safe).
+│   ├── src/db/flows.ts    MongoDB: flow documents, secret generation.
+│   ├── src/db/runs.ts     PostgreSQL: run + step inserts (one transaction),
+│   │                    cursor pagination, stats by SQL.
+│   ├── src/db/mongo.ts / postgres.ts   One client / pool each.
+│   ├── src/db/migrate.ts  Numbered *.sql runner; never applies a file twice.
+│   ├── src/routes/     flows.ts, hooks.ts, runs.ts, mock.ts.
+│   ├── migrations/0001_init.sql   runs + run_steps, indexes (see below).
+│   └── test/           bun test. setup.ts starts one shared in-memory
+│                        MongoDB for the suite (see backend/README.md).
+├── frontend/           Next.js (App Router).
+│   ├── src/app/        /flows, /flows/new, /flows/[id],
+│   │                    /flows/[id]/edit, /runs/[id]. / redirects to /flows.
+│   ├── src/lib/api.ts  Typed fetch client; signs test events in the browser.
+│   ├── src/lib/validation.ts  Form validation with per-field messages.
+│   └── src/components/ FlowForm (add/remove/reorder steps), RunTable
+│                        (status filter + Load more), StateViews (loading,
+│                        empty, error).
+├── docker-compose.yml  Databases only: postgres:16-alpine, mongo:8.
+├── scripts/dev.sh      Loads root .env, starts backend + frontend.
+└── COMMITS.md / HOURS.md   Commit log and honest hours log.
+```
+
+Design decisions worth knowing:
+
+- **Steps run in the request, in order.** There is no queue (out of
+  scope). A filter that returns false records the step as success with
+  output `{matched: false}`, marks the rest skipped, and ends the run
+  as `filtered`.
+- **A transform step replaces the data.** Only transform changes what
+  the next step sees; `http_request` posts the current data but does
+  not change it. A missing dot path in a transform mapping becomes
+  `null`.
+- **The hook checks in this order:** flow exists (404) → signature
+  (401, and no run is recorded) → valid JSON (400) → flow enabled
+  (409) → run the steps (200 with `{runId, status}`).
+- **The flow list never returns step config or the secret.** It uses a
+  MongoDB projection and a limit. The secret is only shown on the
+  single-flow view and on the flow page, where the user needs it to
+  sign test events.
+
+## What is finished
+
+- All ten API paths from the brief, with the exact shapes and status
+  codes, including the error shape `{error: {code, message, details}}`.
+- All three step types, HMAC-SHA256 verification with a timing-safe
+  compare, the 5s http_request timeout, and the first 2 KB of the
+  response body stored as step output.
+- Runs and step records in PostgreSQL via a committed migration;
+  cursor pagination (newest first, default 20, max 100); stats computed
+  by one SQL query; a MongoDB index on the flow list.
+- All four frontend pages with loading, empty and error states, labels
+  on every field, per-field validation messages, step add/remove/
+  reorder, a ready-to-copy curl example, a "Send test event" box that
+  signs with the flow secret, run history with a status filter and
+  pagination, and a per-run step timeline. Usable at 375 px wide.
+- 28 tests (`bun test`): filter operators, transform mapping, signature
+  verification (5 cases), and 13 API tests that call the endpoints for
+  real, including the brief's example end to end.
+- The brief's example verified with curl: amount 4999 → a success run
+  with three steps, the last step's input exactly
+  `{orderId: "ORD-1042", total: 4999, email: "asha@example.com"}`;
+  amount 500 → `filtered`, steps two and three skipped.
+- `bun run migrate`, `bun run dev`, `bun test`, `bun run typecheck`
+  (backend + frontend) and the frontend production build all pass.
+  `docker compose config` validates; `bun install` from the root is a
+  clean no-op.
+- A GitHub Actions workflow (`.github/workflows/ci.yml`) runs type
+  checking and tests on push and pull request, with a PostgreSQL 16
+  service; the tests bring their own in-memory MongoDB.
+
+## What is not finished
+
+- **Screen recording** (3–5 min): recorded after the app is complete,
+  before the submission email goes out.
+- **GitHub repository**: not created yet, nothing pushed. The repo will
+  be public; the parent (Siva) creates it and pushes after this
+  verification.
+- **Codex review pass**: Siva specified his ChatGPT account
+  `venomisay@gmail.com` for the review. It has not happened yet.
+
+## Known bugs and limits
+
+- **No duplicate-event handling.** The same event delivered twice
+  creates two runs (see the third question below). The `X-Event-Id`
+  extra was not built.
+- **No retries.** A failed `http_request` step fails the run at once;
+  the retry extra was not built.
+- **No live run list.** New runs appear on the flow page after a
+  refresh; the live-update extra was not built.
+- **The flow secret is visible in the browser** on the flow page (it
+  has to be, to sign test events there). There is no login — accounts
+  are out of scope — so treat the secret as a shared key, not a
+  password.
+- **No Docker daemon on the build machine**, so `docker compose up -d`
+  itself could not be run here. The compose file was validated with
+  `docker compose config`, and the app was verified against a local
+  PostgreSQL 16 cluster and a local `mongod` with the same versions
+  the compose file pins (postgres:16-alpine, mongo:8). The fresh-clone
+  commands should be re-run once on a machine with Docker before the
+  submission goes out.
+
+## Hours spent
+
+About 1 hour 30 minutes of continuous work so far, and still in
+progress — the running log is in [HOURS.md](HOURS.md). The final
+number goes in the submission email once the work stops.
+
+## AI tools used
+
+- **Muse** (Meta's AI agent) — wrote this repository: layout, backend,
+  frontend, migrations, tests, and this README. Every file was written
+  to be explainable line by line; Siva has to walk through the code and
+  change it live in the interview, so nothing was left as a black box.
+- **ChatGPT Plus / Codex review** — not used yet. Siva specified the
+  account `venomisay@gmail.com` for the review pass; it is still to
+  happen.
+- No other AI tools were used.
+
+## Questions
+
+### Why do flows fit MongoDB and runs fit PostgreSQL? Would you have chosen differently?
+
+A flow is a small document with a variable shape: its steps are a short
+list, and each step type carries different fields, so a schemaless
+document fits without joins or a step-type table. Flows are read by id
+or as a newest-first list, both of which MongoDB does well. Runs are the
+opposite: append-only, tabular, and relational — a run has many step
+records, and the questions asked of them are aggregations (stats) and
+ordered, paginated reads, which SQL and indexes answer directly. I
+would not choose differently for this size; if flows ever needed
+transactions or cross-flow queries, PostgreSQL would be the better home
+for them too.
+
+### Which indexes did you create, and which query does each one serve?
+
+MongoDB: `{createdAt: -1}` on the flows collection serves
+`GET /api/flows`, which lists flows newest first with a projection and a
+limit. PostgreSQL: `idx_runs_flow_started (flow_id, started_at DESC,
+id DESC)` serves `GET /api/flows/:id/runs` — filter by flow, newest
+first, with cursor pagination on `(started_at, id)`. And
+`idx_run_steps_run (run_id, position)` serves `GET /api/runs/:runId`,
+which fetches one run's steps in position order.
+
+### What happens if the same event is delivered twice?
+
+It is delivered twice, and Flowlet runs it twice. Each delivery is
+verified and executed on its own, so a second identical event creates a
+second run with the same payload, and if the flow posts to another
+system, that system sees the event twice. There is no deduplication:
+the `X-Event-Id` extra was not built. If a receiver must be idempotent
+it should key on something inside the payload itself, such as the order
+id, rather than on the delivery.
+
+### What happens to the run history when a flow is deleted? Why did you choose that?
+
+The runs stay. A run's `flow_id` is a plain text field — there is no
+foreign key from PostgreSQL into MongoDB, because a foreign key cannot
+point across databases — and each run also snapshots the flow name, so
+it stays readable after the flow is gone. Only the step records are
+tied to their run (`run_steps.run_id REFERENCES runs(id) ON DELETE
+CASCADE`). I chose this because run history is an audit trail: deleting
+a flow should not rewrite what happened, and a user debugging a past
+delivery needs the run even after the flow that produced it is gone.
+
+### If this service received 100 events per second, what would break first, and what would you change?
+
+The request path would break first. Steps run synchronously inside the
+webhook request, so each event holds a connection open while its
+`http_request` steps wait on a downstream system — up to 5 seconds each
+— and slow receivers would pile up requests until the server ran out of
+connections. The PostgreSQL pool would be next. I would move execution
+off the request path: accept the event, write the run as pending, and
+hand it to a worker queue, with a cap on concurrent outbound calls and
+a circuit breaker per target. Reads are already safe: the run list is
+paginated and indexed, and stats come from one SQL query.
+
+## Submitting
+
+Reply to the Octaviaflow invite email with the GitHub repo link, hours
+spent, and the 3–5 minute screen recording. Not sent yet.
