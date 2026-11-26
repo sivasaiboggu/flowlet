@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { ApiError, listRuns } from "@/lib/api";
 import type { RunRecord } from "@/lib/types";
@@ -20,16 +20,28 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-export default function RunTable({ flowId }: { flowId: string }) {
+export default function RunTable({
+  flowId,
+  refreshKey = 0,
+}: {
+  flowId: string;
+  /** Increment to reload from the first page (e.g. after a test event). */
+  refreshKey?: number;
+}) {
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  // Sequence of the latest load. A response from an older request —
+  // started before the filter changed, or before a refresh — is stale
+  // and must never overwrite the newer list.
+  const requestSeq = useRef(0);
 
   const load = useCallback(
     async (cursor?: string) => {
+      const seq = ++requestSeq.current;
       if (cursor) setLoadingMore(true);
       else setLoading(true);
       setError("");
@@ -39,13 +51,16 @@ export default function RunTable({ flowId }: { flowId: string }) {
           limit: 20,
           cursor,
         });
+        if (seq !== requestSeq.current) return;
         setRuns((prev) => (cursor ? [...prev, ...page.items] : page.items));
         setNextCursor(page.nextCursor);
       } catch (err) {
+        if (seq !== requestSeq.current) return;
         setError(
           err instanceof ApiError ? err.message : "Could not load runs.",
         );
       } finally {
+        if (seq !== requestSeq.current) return;
         setLoading(false);
         setLoadingMore(false);
       }
@@ -57,7 +72,7 @@ export default function RunTable({ flowId }: { flowId: string }) {
     setRuns([]);
     setNextCursor(null);
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   function onFilter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,8 +102,9 @@ export default function RunTable({ flowId }: { flowId: string }) {
 
       {runs.length === 0 ? (
         <EmptyState>
-          No runs yet. Runs appear here after an event reaches this
-          flow&apos;s webhook URL.
+          {statusFilter
+            ? `No ${statusFilter} runs yet.`
+            : "No runs yet. Runs appear here after an event reaches this flow's webhook URL."}
         </EmptyState>
       ) : (
         <div className="table-wrap">
@@ -97,7 +113,7 @@ export default function RunTable({ flowId }: { flowId: string }) {
               <tr>
                 <th>Status</th>
                 <th>Started</th>
-                <th>Duration</th>
+                <th className="col-duration">Duration</th>
                 <th>Run</th>
               </tr>
             </thead>
@@ -106,7 +122,7 @@ export default function RunTable({ flowId }: { flowId: string }) {
                 <tr key={run.id}>
                   <td>{statusPill(run.status)}</td>
                   <td className="num">{formatTime(run.startedAt)}</td>
-                  <td className="num">{run.durationMs} ms</td>
+                  <td className="num col-duration">{run.durationMs} ms</td>
                   <td className="mono">
                     <Link href={`/runs/${run.id}`}>{run.id.slice(0, 8)}…</Link>
                   </td>
