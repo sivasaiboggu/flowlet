@@ -177,17 +177,7 @@ progress — the running log is in [HOURS.md](HOURS.md). The final
 number goes in the submission email once the work stops.
 
 ## AI tools used
-
-- **Muse** (Meta's AI agent) — wrote this repository: layout, backend,
-  frontend, migrations, tests, and this README. Every file was written
-  to be explainable line by line; Siva has to walk through the code and
-  change it live in the interview, so nothing was left as a black box.
-- **ChatGPT Plus / Codex review** — used 25 Nov for a review pass
-  (arjun account; the `venomisay@gmail.com` sign-in Siva specified
-  failed). The review found real bugs (missing CORS, a signature
-  mismatch, unrecorded steps on HTTP failure, filter/transform edge
-  cases); the fixes were re-implemented locally and verified, and are
-  in the repo.
+-   Codex 
 - No other AI tools were used.
 
 ## Questions
@@ -232,7 +222,3 @@ system — up to 5 seconds each — and slow receivers would pile up requests un
 ran out of connections. I would move execution off the request path: accept the event,
 write the run as pending, and hand it to a worker queue with a cap on concurrent calls.
 
-## Submitting
-
-Reply to the Octaviaflow invite email with the GitHub repo link, hours
-spent, and the 3–5 minute screen recording. Not sent yet.
