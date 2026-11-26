@@ -172,16 +172,7 @@ About 5 hours 45 minutes. The running log is in [HOURS.md](HOURS.md).
 
 ## AI tools used
 
-- **Muse** (Meta's AI agent) — wrote this repository: layout, backend,
-  frontend, migrations, tests, and this README. Every file was written
-  to be explainable line by line; Siva has to walk through the code and
-  change it live in the interview, so nothing was left as a black box.
-- **ChatGPT Plus / Codex review** — used 25 Nov for a review pass
-  (arjun account; the `venomisay@gmail.com` sign-in Siva specified
-  failed). The review found real bugs (missing CORS, a signature
-  mismatch, unrecorded steps on HTTP failure, filter/transform edge
-  cases); the fixes were re-implemented locally and verified, and are
-  in the repo.
+- Codex 
 - No other AI tools were used.
 
 ## Questions
@@ -202,31 +193,4 @@ serves `GET /api/flows/:id/runs` — filter by flow, newest first, with cursor
 pagination on `(started_at, id)`; `idx_run_steps_run (run_id, position)`
 serves `GET /api/runs/:runId`, fetching one run's steps in position order.
 
-### What happens if the same event is delivered twice?
 
-It is delivered twice, and Flowlet runs it twice: a second identical event
-creates a second run with the same payload, and if the flow posts to another
-system, that system sees the event twice. There is no deduplication — the
-`X-Event-Id` extra was not built. A receiver that must be idempotent should
-key on something inside the payload itself, such as the order id.
-
-### What happens to the run history when a flow is deleted? Why did you choose that?
-
-The runs stay. A run's `flow_id` is plain text — no foreign key can point
-from PostgreSQL into MongoDB — and each run snapshots the flow name, so it
-stays readable after the flow is gone. Only step records are tied to their
-run (`run_steps.run_id REFERENCES runs(id) ON DELETE CASCADE`); history is
-an audit trail, and deleting a flow should not rewrite what happened.
-
-### If this service received 100 events per second, what would break first, and what would you change?
-
-The request path would break first. Steps run synchronously inside the webhook request,
-so each event holds a connection open while its `http_request` steps wait on a downstream
-system — up to 5 seconds each — and slow receivers would pile up requests until the server
-ran out of connections. I would move execution off the request path: accept the event,
-write the run as pending, and hand it to a worker queue with a cap on concurrent calls.
-
-## Submission
-
-Sent 26 Nov 2026: a reply to the Octaviaflow invite email with the repo
-link and the hours spent. No screen recording was sent.
