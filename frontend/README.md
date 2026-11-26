@@ -27,6 +27,7 @@ The frontend talks to the backend at `NEXT_PUBLIC_API_URL`
   example, summary numbers from `/stats`, a "Send test event" box that
   accepts JSON and signs it with the flow secret in the browser, and
   the run history with a status filter and pagination (Load more).
+  The secret stays hidden on screen until you ask to see it.
 - The run page is a timeline: each step with its status, duration,
   input, output and error.
 - The layout is usable at 375 px wide.

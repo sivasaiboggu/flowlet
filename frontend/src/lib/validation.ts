@@ -114,7 +114,10 @@ export function draftToInput(draft: FlowDraft): {
         };
       }
       if (step.type === "transform") {
-        const mapping: Record<string, string> = {};
+        // A plain object would swallow "__proto__" as an output name:
+        // assigning to it changes the prototype instead of storing the
+        // row, so the field would never reach the API.
+        const mapping: Record<string, string> = Object.create(null);
         for (const entry of step.mapping) {
           mapping[entry.outKey.trim()] = entry.path.trim();
         }

@@ -20,6 +20,26 @@ import { conflict, notFound, unauthorized, validationError } from "../lib/errors
 import { isFlowId } from "../validation";
 import type { JsonValue } from "../types";
 
+// Same 1 MB cap as the JSON body parser for flow CRUD. The webhook
+// used to read the whole body with no limit, so a huge event was
+// buffered in full before anything checked it.
+const MAX_WEBHOOK_BODY_BYTES = 1_000_000;
+
+/**
+ * True when any string inside the value holds a NUL character.
+ * PostgreSQL jsonb refuses NULs, so such an event could never be
+ * recorded — without this check the steps ran and the insert then
+ * failed, and the webhook answered 500 with no run at all.
+ */
+function containsNul(value: unknown): boolean {
+  if (typeof value === "string") return value.includes("\u0000");
+  if (Array.isArray(value)) return value.some(containsNul);
+  if (typeof value === "object" && value !== null) {
+    return Object.values(value as Record<string, unknown>).some(containsNul);
+  }
+  return false;
+}
+
 export const hookRoutes: Route[] = [
   {
     method: "POST",
@@ -35,6 +55,12 @@ export const hookRoutes: Route[] = [
       if (!flow) throw notFound("Flow not found");
 
       const rawBody = Buffer.from(await req.arrayBuffer());
+      if (rawBody.length > MAX_WEBHOOK_BODY_BYTES) {
+        // Checked before the signature on purpose: verifying the
+        // signature would need the whole body buffered anyway. The
+        // brief has no oversize case, so this is a plain 400.
+        throw validationError("Request body too large");
+      }
       const signature = req.headers.get("X-Flowlet-Signature");
       if (!verifySignature(flow.secret, rawBody, signature)) {
         // Deliberately no run is recorded for a failed signature.
@@ -46,6 +72,11 @@ export const hookRoutes: Route[] = [
         payload = JSON.parse(new TextDecoder().decode(rawBody)) as unknown;
       } catch {
         throw validationError("Request body is not valid JSON");
+      }
+      if (containsNul(payload)) {
+        throw validationError(
+          "Request body contains a NUL character, which cannot be stored",
+        );
       }
       // Any JSON value is a valid event — an object, an array, or a
       // scalar. Steps read what they need from it via dot paths; a

@@ -1,7 +1,7 @@
 # Flowlet
 
 A mini webhook automation service. A user creates a flow with a few
-steps, an external system sends an event to the flow's webhook URL, and
+steps, an outside system sends an event to the flow's webhook URL, and
 the service runs the steps in order and records the result as a run.
 
 Built for the Octaviaflow Full Stack Developer Intern take-home
@@ -9,7 +9,7 @@ Built for the Octaviaflow Full Stack Developer Intern take-home
 
 ## How to run
 
-From a fresh clone, exactly as the brief specifies:
+From a fresh clone:
 
 ```bash
 cp .env.example .env
@@ -33,17 +33,18 @@ taken 26 Nov 2026.
 
 ![Flows list](preview/flows-desktop.png)
 
-*The flows list — the demo flow's latest run shows as Filtered.*
+*The flows list. The demo flow's latest run shows as Filtered.*
 
 ![Flows list on a phone](preview/flows-mobile.png)
 
-*The same list at 375 px wide — the Created column is hidden at this
+*The same list at 375 px wide. The Created column is hidden at this
 width so nothing scrolls sideways.*
 
 ![Flow page](preview/flow-detail.png)
 
-*A flow's page: webhook URL and secret, a ready-to-copy curl example,
-and the run summary (2 runs: 1 success, 1 filtered).*
+*A flow's page: webhook URL, the secret hidden until you ask to see
+it, a ready-to-copy curl example, and the run summary (2 runs: 1
+success, 1 filtered).*
 
 ![Run timeline](preview/run-timeline.png)
 
@@ -89,10 +90,10 @@ flowlet/
 │                        empty, error).
 ├── docker-compose.yml  Databases only: postgres:16-alpine, mongo:8.
 ├── scripts/dev.sh      Loads root .env, starts backend + frontend.
-└── COMMITS.md / HOURS.md   Commit log and honest hours log.
+└── COMMITS.md / HOURS.md   Commit log and hours log.
 ```
 
-Design decisions worth knowing:
+Things worth knowing:
 
 - **Steps run in the request, in order.** There is no queue (out of
   scope). A filter that returns false records the step as success with
@@ -102,13 +103,15 @@ Design decisions worth knowing:
   the next step sees; `http_request` posts the current data but does
   not change it. A missing dot path in a transform mapping becomes
   `null`.
-- **The hook checks in this order:** flow exists (404) → signature
-  (401, and no run is recorded) → valid JSON (400) → flow enabled
-  (409) → run the steps (200 with `{runId, status}`).
-- **The flow list never returns step config or the secret.** It uses a
-  MongoDB projection and a limit. The secret is only shown on the
-  single-flow view and on the flow page, where the user needs it to
-  sign test events.
+- **The hook checks in this order:** flow exists (404), signature
+  (401, and no run is recorded), valid JSON (400), flow enabled
+  (409), then it runs the steps (200 with `{runId, status}`).
+- **The flow list never returns step config or the secret.** The
+  secret is only on the single-flow view, hidden on screen until you
+  ask to see it, and the page uses it to sign test events.
+- **Webhook bodies are capped at 1 MB**, the same cap as the other
+  JSON endpoints. An event holding a NUL character gets a 400 before
+  any step runs, because PostgreSQL cannot store it.
 
 ## What is finished
 
@@ -125,13 +128,13 @@ Design decisions worth knowing:
   reorder, a ready-to-copy curl example, a "Send test event" box that
   signs with the flow secret, run history with a status filter and
   pagination, and a per-run step timeline. Usable at 375 px wide.
-- 36 tests (`bun test`): filter operators, transform mapping, signature
-  verification, and API tests that call the endpoints for real,
-  including the brief's example end to end.
-- The brief's example verified with curl: amount 4999 → a success run
-  with three steps, the last step's input exactly
+- 42 tests (`bun test`), all passing: filter operators, transform
+  mapping, signature verification, and API tests that call the
+  endpoints for real, including the brief's example end to end.
+- The brief's example verified live with curl: amount 4999 gives a
+  success run with three steps, the last step's input exactly
   `{orderId: "ORD-1042", total: 4999, email: "asha@example.com"}`;
-  amount 500 → `filtered`, steps two and three skipped.
+  amount 500 gives `filtered`, steps two and three skipped.
 - `bun run migrate`, `bun run dev`, `bun test`, `bun run typecheck`
   (backend + frontend) and the frontend production build all pass.
   `docker compose config` validates; `bun install` from the root is a
@@ -139,17 +142,15 @@ Design decisions worth knowing:
 - A GitHub Actions workflow (`.github/workflows/ci.yml`) runs type
   checking and tests on push and pull request, with a PostgreSQL 16
   service; the tests bring their own in-memory MongoDB.
+- Fixes from a 26 Nov review pass: the flow secret is hidden on the
+  flow page until you ask to see it (copy still works); a transform
+  output named `__proto__` is kept as a real field instead of being
+  lost; empty transform output names are rejected; mapping errors now
+  point at the right row in the form; webhook bodies are capped at
+  1 MB; an event with a NUL character gets a clear 400 instead of a
+  500 with no run recorded.
 
-## What is not finished
-
-- **Screen recording** (3–5 min): recorded after the app is complete,
-  before the submission email goes out.
-- **Codex review fixes**: the review (25 Nov, ChatGPT Plus) found real
-  bugs; the fixes were re-implemented locally and verified (36/36 tests),
-  and are in the repo. The review's own branch could not be pushed
-  (same access issue as below, since resolved).
-
-## Known bugs and limits
+## Limits
 
 - **No duplicate-event handling.** The same event delivered twice
   creates two runs (see the third question below). The `X-Event-Id`
@@ -157,27 +158,30 @@ Design decisions worth knowing:
 - **No retries.** A failed `http_request` step fails the run at once;
   the retry extra was not built.
 - **No live run list.** New runs appear on the flow page after a
-  refresh; the live-update extra was not built.
-- **The flow secret is visible in the browser** on the flow page (it
-  has to be, to sign test events there). There is no login — accounts
-  are out of scope — so treat the secret as a shared key, not a
-  password.
+  refresh; the live-update extra was not built. Sending a test event
+  from the flow page does refresh the summary and history at once.
 - **No Docker daemon on the build machine**, so `docker compose up -d`
   itself could not be run here. The compose file was validated with
   `docker compose config`, and the app was verified against a local
   PostgreSQL 16 cluster and a local `mongod` with the same versions
-  the compose file pins (postgres:16-alpine, mongo:8). The fresh-clone
-  commands should be re-run once on a machine with Docker before the
-  submission goes out.
+  the compose file pins (postgres:16-alpine, mongo:8).
 
 ## Hours spent
 
-About 4 hours 45 minutes of work so far, and still in
-progress — the running log is in [HOURS.md](HOURS.md). The final
-number goes in the submission email once the work stops.
+About 5 hours 45 minutes. The running log is in [HOURS.md](HOURS.md).
 
 ## AI tools used
--   Codex 
+
+- **Muse** (Meta's AI agent) — wrote this repository: layout, backend,
+  frontend, migrations, tests, and this README. Every file was written
+  to be explainable line by line; Siva has to walk through the code and
+  change it live in the interview, so nothing was left as a black box.
+- **ChatGPT Plus / Codex review** — used 25 Nov for a review pass
+  (arjun account; the `venomisay@gmail.com` sign-in Siva specified
+  failed). The review found real bugs (missing CORS, a signature
+  mismatch, unrecorded steps on HTTP failure, filter/transform edge
+  cases); the fixes were re-implemented locally and verified, and are
+  in the repo.
 - No other AI tools were used.
 
 ## Questions
@@ -222,3 +226,7 @@ system — up to 5 seconds each — and slow receivers would pile up requests un
 ran out of connections. I would move execution off the request path: accept the event,
 write the run as pending, and hand it to a worker queue with a cap on concurrent calls.
 
+## Submission
+
+Sent 26 Nov 2026: a reply to the Octaviaflow invite email with the repo
+link and the hours spent. No screen recording was sent.
