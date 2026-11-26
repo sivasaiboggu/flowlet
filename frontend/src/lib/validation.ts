@@ -57,9 +57,17 @@ export function validateDraft(draft: FlowDraft): Record<string, string> {
       if (step.mapping.length === 0) {
         errors[`${base}.mapping`] = "Add at least one output field";
       }
+      const seenNames = new Set<string>();
       step.mapping.forEach((entry, j) => {
         if (!entry.outKey.trim()) {
           errors[`${base}.mapping.${j}.outKey`] = "Output field name is required";
+        } else if (seenNames.has(entry.outKey.trim())) {
+          // A mapping is an object, so a repeated name would silently
+          // overwrite the earlier row — flag it at the row instead.
+          errors[`${base}.mapping.${j}.outKey`] =
+            "Output field names must be unique";
+        } else {
+          seenNames.add(entry.outKey.trim());
         }
         if (!DOT_PATH.test(entry.path)) {
           errors[`${base}.mapping.${j}.path`] =

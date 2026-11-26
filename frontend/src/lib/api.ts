@@ -60,7 +60,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function listFlows(): Promise<FlowSummary[]> {
-  return request<FlowSummary[]>("/api/flows");
+  // The API defaults to 50 flows; ask for the maximum (100) so the
+  // list shows every flow instead of stopping at the default page.
+  return request<FlowSummary[]>("/api/flows?limit=100");
 }
 
 export async function getFlow(id: string): Promise<Flow> {
@@ -107,14 +109,16 @@ export async function getStats(flowId: string): Promise<FlowStats> {
   return request<FlowStats>(`/api/flows/${flowId}/stats`);
 }
 
-/** HMAC-SHA256 of the raw body, keyed by the flow secret (hex). */
-export async function signBody(secretHex: string, text: string): Promise<string> {
-  const bytes = new Uint8Array(
-    (secretHex.match(/.{2}/g) ?? []).map((b) => parseInt(b, 16)),
-  );
+/**
+ * HMAC-SHA256 of the raw body, keyed by the flow secret — the literal
+ * secret string, exactly as the backend signs it. (An earlier version
+ * decoded the secret as hex bytes, which produced a different HMAC
+ * and every signed test event failed with 401.)
+ */
+export async function signBody(secret: string, text: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
-    bytes,
+    new TextEncoder().encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
