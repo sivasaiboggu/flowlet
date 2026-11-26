@@ -312,6 +312,72 @@ test("API: mock receiver echoes and fails on ?fail=1", async () => {
   expect(asRecord(fail.body.error).code).toBe("MOCK_FAILURE");
 });
 
+test("API: malformed flow ids return 404, not 400", async () => {
+  const get = await api("GET", "/api/flows/not-an-id");
+  expect(get.status).toBe(404);
+  expect(asRecord(get.body.error).code).toBe("NOT_FOUND");
+
+  const hook = await api("POST", "/api/hooks/not-an-id", "{}");
+  expect(hook.status).toBe(404);
+
+  const runs = await api("GET", "/api/flows/not-an-id/runs");
+  expect(runs.status).toBe(404);
+
+  const stats = await api("GET", "/api/flows/not-an-id/stats");
+  expect(stats.status).toBe(404);
+});
+
+test("API: webhook accepts array and scalar events", async () => {
+  const { status, body } = await api("POST", "/api/flows", {
+    name: "Any JSON event",
+    steps: [{ type: "http_request", url: `${base}/api/mock/receiver`, method: "POST" }],
+  });
+  expect(status).toBe(201);
+  const anyFlowId = body.id as string;
+  const anySecret = body.secret as string;
+  flowIds.push(anyFlowId);
+
+  for (const raw of ["[1, 2, 3]", "42", '"hello"']) {
+    const sig = signBody(anySecret, Buffer.from(raw, "utf8"));
+    const hook = await api("POST", `/api/hooks/${anyFlowId}`, raw, {
+      "X-Flowlet-Signature": `sha256=${sig}`,
+    });
+    expect(hook.status).toBe(200);
+    expect(hook.body.status).toBe("success");
+  }
+});
+
+test("API: CORS preflight and headers for the local frontend", async () => {
+  const preflight = await fetch(`${base}/api/flows`, {
+    method: "OPTIONS",
+    headers: {
+      Origin: "http://localhost:3000",
+      "Access-Control-Request-Method": "POST",
+    },
+  });
+  expect(preflight.status).toBe(204);
+  expect(preflight.headers.get("Access-Control-Allow-Origin")).toBe(
+    "http://localhost:3000",
+  );
+  expect(preflight.headers.get("Access-Control-Allow-Methods")).toContain("POST");
+  expect(preflight.headers.get("Access-Control-Allow-Headers")).toContain(
+    "X-Flowlet-Signature",
+  );
+
+  const res = await fetch(`${base}/api/flows`, {
+    headers: { Origin: "http://localhost:3000" },
+  });
+  expect(res.status).toBe(200);
+  expect(res.headers.get("Access-Control-Allow-Origin")).toBe(
+    "http://localhost:3000",
+  );
+
+  const other = await fetch(`${base}/api/flows`, {
+    headers: { Origin: "http://evil.example.com" },
+  });
+  expect(other.headers.get("Access-Control-Allow-Origin")).toBeNull();
+});
+
 test("API: patch renames a flow; delete removes it", async () => {
   const patched = await api("PATCH", `/api/flows/${flowId}`, {
     name: "High value orders v2",

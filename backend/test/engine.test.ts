@@ -33,6 +33,34 @@ test("filter operators: eq, neq, gt, lt, contains", () => {
   expect(evalFilter("4999", "gt", 1000)).toBe(false);
 });
 
+test("filter operators: object equality ignores key order", () => {
+  expect(evalFilter({ a: 1, b: 2 }, "eq", { b: 2, a: 1 })).toBe(true);
+  expect(evalFilter({ a: { x: 1, y: 2 } }, "eq", { a: { y: 2, x: 1 } })).toBe(true);
+  expect(evalFilter({ a: 1, b: 2 }, "eq", { a: 1, b: 3 })).toBe(false);
+  expect(evalFilter({ a: 1 }, "eq", { a: 1, b: 2 })).toBe(false);
+  // Arrays keep their order.
+  expect(evalFilter([1, 2], "eq", [2, 1])).toBe(false);
+  expect(evalFilter([{ a: 1, b: 2 }], "contains", { b: 2, a: 1 })).toBe(true);
+});
+
+test("filter operators: a missing field fails neq too", () => {
+  expect(evalFilter(undefined, "neq", 1)).toBe(false);
+  expect(evalFilter(undefined, "neq", "x")).toBe(false);
+  expect(evalFilter(undefined, "neq", null)).toBe(false);
+  // A field that is present still compares normally.
+  expect(evalFilter(4999, "neq", 500)).toBe(true);
+  expect(evalFilter(null, "neq", 1)).toBe(true);
+});
+
+test("getValueAtPath reads own properties only", () => {
+  const data = { order: { id: "ORD-1" } };
+  expect(getValueAtPath(data, "order.id")).toBe("ORD-1");
+  expect(getValueAtPath(data, "constructor")).toBeUndefined();
+  expect(getValueAtPath(data, "toString")).toBeUndefined();
+  expect(getValueAtPath(data, "__proto__")).toBeUndefined();
+  expect(getValueAtPath(data.order, "constructor")).toBeUndefined();
+});
+
 test("transform mapping: nested paths, missing path becomes null", async () => {
   const steps: FlowStep[] = [
     {
@@ -144,6 +172,58 @@ test("engine: http_request non-2xx fails the step and the run", async () => {
     const output = result.steps[0].output as { status: number; body: string };
     expect(output.status).toBe(500);
     expect(output.body).toBe("boom");
+  } finally {
+    server.stop();
+  }
+});
+
+test("engine: http_request failure still records the later steps as skipped", async () => {
+  const server = Bun.serve({
+    port: 0,
+    fetch: () => new Response("boom", { status: 500 }),
+  });
+  try {
+    const steps: FlowStep[] = [
+      { type: "http_request", url: `http://localhost:${server.port}/target`, method: "POST" },
+      { type: "transform", mapping: { total: "order.amount" } },
+      { type: "http_request", url: `http://localhost:${server.port}/target`, method: "POST" },
+    ];
+    const result = await runSteps(steps, { order: { amount: 1 } });
+    expect(result.status).toBe("failed");
+    expect(result.steps).toHaveLength(3);
+    expect(result.steps[0].status).toBe("failed");
+    expect(result.steps[1].status).toBe("skipped");
+    expect(result.steps[2].status).toBe("skipped");
+  } finally {
+    server.stop();
+  }
+});
+
+test("engine: http_request does not follow redirects", async () => {
+  let targetHits = 0;
+  const server = Bun.serve({
+    port: 0,
+    fetch: (req) => {
+      const url = new URL(req.url);
+      if (url.pathname === "/redirect") {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `${url.origin}/target` },
+        });
+      }
+      targetHits += 1;
+      return Response.json({ ok: true });
+    },
+  });
+  try {
+    const steps: FlowStep[] = [
+      { type: "http_request", url: `http://localhost:${server.port}/redirect`, method: "POST" },
+    ];
+    const result = await runSteps(steps, { ping: 1 });
+    expect(result.status).toBe("failed");
+    expect(result.steps[0].status).toBe("failed");
+    expect(result.steps[0].error).toContain("HTTP 302");
+    expect(targetHits).toBe(0);
   } finally {
     server.stop();
   }
