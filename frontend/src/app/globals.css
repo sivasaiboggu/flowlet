@@ -192,6 +192,7 @@ input:focus-visible {
   font: inherit;
   font-weight: 500;
   padding: 9px 16px;
+  white-space: nowrap;
 }
 
 .btn-primary {
@@ -490,6 +491,14 @@ tr:last-child td {
 @media (max-width: 640px) {
   .page-head {
     margin-top: 28px;
+  }
+
+  /* The flows and run-history tables lose their least useful column
+     rather than scrolling sideways: Created on /flows, Duration in
+     the run history. Both stay visible on wider screens. */
+  .col-created,
+  .col-duration {
+    display: none;
   }
 
   .form-row {
