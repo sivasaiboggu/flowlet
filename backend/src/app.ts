@@ -5,7 +5,14 @@
 import { checkMongo } from "./db/mongo";
 import { checkPostgres } from "./db/postgres";
 import { ApiError } from "./lib/errors";
-import { error, json, matchRoute, type Route } from "./lib/http";
+import {
+  corsHeaders,
+  error,
+  json,
+  matchRoute,
+  withCors,
+  type Route,
+} from "./lib/http";
 import { flowRoutes } from "./routes/flows";
 import { hookRoutes } from "./routes/hooks";
 import { mockRoutes } from "./routes/mock";
@@ -39,23 +46,42 @@ const routes: Route[] = [
 export async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
+  const cors = corsHeaders(req);
+
+  if (req.method === "OPTIONS") {
+    // Preflight for the browser frontend: answer without a route, so
+    // the browser's real request is allowed through.
+    return new Response(null, {
+      status: 204,
+      headers: {
+        ...cors,
+        "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, X-Flowlet-Signature",
+        "Access-Control-Max-Age": "86400",
+      },
+    });
+  }
 
   for (const route of routes) {
     if (route.method !== req.method) continue;
     const params = matchRoute(route.pattern, path);
     if (!params) continue;
     try {
-      return await route.handler(req, params);
+      return withCors(await route.handler(req, params), cors);
     } catch (err) {
       if (err instanceof ApiError) {
-        return error(err);
+        return withCors(error(err), cors);
       }
       console.error(`[http] ${req.method} ${path} failed:`, err);
-      return error(
-        new ApiError(500, "INTERNAL_ERROR", "Internal server error"),
+      return withCors(
+        error(new ApiError(500, "INTERNAL_ERROR", "Internal server error")),
+        cors,
       );
     }
   }
 
-  return error(new ApiError(404, "NOT_FOUND", `No route for ${req.method} ${path}`));
+  return withCors(
+    error(new ApiError(404, "NOT_FOUND", `No route for ${req.method} ${path}`)),
+    cors,
+  );
 }
