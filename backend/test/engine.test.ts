@@ -199,6 +199,48 @@ test("engine: http_request failure still records the later steps as skipped", as
   }
 });
 
+test("transform mapping: __proto__ as an output name keeps the value", async () => {
+  const steps: FlowStep[] = [
+    {
+      type: "transform",
+      // Built with JSON.parse on purpose: a __proto__ key in an object
+      // literal would set the prototype instead of storing the entry.
+      mapping: JSON.parse(
+        '{"__proto__":"order.id","normal":"order.amount"}',
+      ) as Record<string, string>,
+    },
+  ];
+  const data: JsonValue = { order: { id: "ORD-1042", amount: 4999 } };
+  const result = await runSteps(steps, data);
+  expect(result.status).toBe("success");
+  const output = result.steps[0].output as Record<string, unknown>;
+  // A plain object would swallow "__proto__" (it sets the prototype
+  // instead of storing the value), so the field would vanish and the
+  // run would still report success.
+  expect(Object.prototype.hasOwnProperty.call(output, "__proto__")).toBe(true);
+  expect(output["__proto__"]).toBe("ORD-1042");
+  expect(output["normal"]).toBe(4999);
+  // The stored record round-trips through JSON the same way.
+  expect(JSON.parse(JSON.stringify(output)) as Record<string, unknown>).toEqual(
+    JSON.parse('{"__proto__":"ORD-1042","normal":4999}') as Record<string, unknown>,
+  );
+});
+
+test("transform mapping: a later filter can read a __proto__ field", async () => {
+  const steps: FlowStep[] = [
+    {
+      type: "transform",
+      mapping: JSON.parse('{"__proto__":"order.id"}') as Record<string, string>,
+    },
+    { type: "filter", field: "__proto__", operator: "eq", value: "ORD-1042" },
+  ];
+  const data: JsonValue = { order: { id: "ORD-1042", amount: 4999 } };
+  const result = await runSteps(steps, data);
+  expect(result.status).toBe("success");
+  expect(result.steps[1].status).toBe("success");
+  expect(result.steps[1].output).toEqual({ matched: true });
+});
+
 test("engine: http_request does not follow redirects", async () => {
   let targetHits = 0;
   const server = Bun.serve({

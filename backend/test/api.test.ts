@@ -378,6 +378,98 @@ test("API: CORS preflight and headers for the local frontend", async () => {
   expect(other.headers.get("Access-Control-Allow-Origin")).toBeNull();
 });
 
+test("API: transform mapping errors are keyed by row index", async () => {
+  const emptyKey = await api("POST", "/api/flows", {
+    name: "Empty key",
+    steps: [{ type: "transform", mapping: { "": "order.id" } }],
+  });
+  expect(emptyKey.status).toBe(400);
+  expect(asRecord(asRecord(emptyKey.body.error).details)["steps.0.mapping.0.outKey"]).toBe(
+    "Output field name is required",
+  );
+
+  const badPath = await api("POST", "/api/flows", {
+    name: "Bad path",
+    steps: [{ type: "transform", mapping: { orderId: "order..id" } }],
+  });
+  expect(badPath.status).toBe(400);
+  expect(asRecord(asRecord(badPath.body.error).details)["steps.0.mapping.0.path"]).toBe(
+    "Each mapping value must be a dot path like order.id",
+  );
+});
+
+test("API: transform keeps a __proto__ output field end to end", async () => {
+  const created = await api("POST", "/api/flows", {
+    name: "Proto flow",
+    steps: [
+      {
+        type: "transform",
+        // Built with JSON.parse on purpose: a __proto__ key in an object
+        // literal would set the prototype instead of storing the entry.
+        mapping: JSON.parse(
+          '{"__proto__":"order.id","total":"order.amount"}',
+        ) as Record<string, string>,
+      },
+      { type: "http_request", url: `${base}/api/mock/receiver`, method: "POST" },
+    ],
+  });
+  expect(created.status).toBe(201);
+  const protoFlowId = created.body.id as string;
+  const protoSecret = created.body.secret as string;
+  flowIds.push(protoFlowId);
+
+  const raw = JSON.stringify(ORDER_EVENT);
+  const sig = signBody(protoSecret, Buffer.from(raw, "utf8"));
+  const hook = await api("POST", `/api/hooks/${protoFlowId}`, raw, {
+    "X-Flowlet-Signature": `sha256=${sig}`,
+  });
+  expect(hook.status).toBe(200);
+  expect(hook.body.status).toBe("success");
+
+  const run = await api("GET", `/api/runs/${hook.body.runId as string}`);
+  const steps = asList(run.body.steps);
+  const output = asRecord(steps[0].output);
+  expect(Object.prototype.hasOwnProperty.call(output, "__proto__")).toBe(true);
+  expect(output["__proto__"]).toBe("ORD-1042");
+  expect(output["total"]).toBe(4999);
+  expect(steps[1].input).toEqual(
+    JSON.parse('{"__proto__":"ORD-1042","total":4999}'),
+  );
+});
+
+test("API: webhook rejects an oversized body with 400", async () => {
+  const big = JSON.stringify({
+    event: "order.created",
+    order: { id: "ORD-BIG", amount: 4999, pad: "x".repeat(1_100_000) },
+  });
+  expect(big.length).toBeGreaterThan(1_000_000);
+  const sig = signBody(secret, Buffer.from(big, "utf8"));
+  const hook = await api("POST", `/api/hooks/${flowId}`, big, {
+    "X-Flowlet-Signature": `sha256=${sig}`,
+  });
+  expect(hook.status).toBe(400);
+  expect(asRecord(hook.body.error).code).toBe("VALIDATION_ERROR");
+});
+
+test("API: webhook rejects a NUL character with 400 and records no run", async () => {
+  const before = await api("GET", `/api/flows/${flowId}/stats`);
+  const totalBefore = before.body.total as number;
+
+  const raw = JSON.stringify({
+    event: "order.created",
+    order: { id: "ORD-NUL", amount: 4999, note: "a\u0000b" },
+  });
+  const sig = signBody(secret, Buffer.from(raw, "utf8"));
+  const hook = await api("POST", `/api/hooks/${flowId}`, raw, {
+    "X-Flowlet-Signature": `sha256=${sig}`,
+  });
+  expect(hook.status).toBe(400);
+  expect(asRecord(hook.body.error).code).toBe("VALIDATION_ERROR");
+
+  const after = await api("GET", `/api/flows/${flowId}/stats`);
+  expect(after.body.total).toBe(totalBefore);
+});
+
 test("API: patch renames a flow; delete removes it", async () => {
   const patched = await api("PATCH", `/api/flows/${flowId}`, {
     name: "High value orders v2",
