@@ -12,27 +12,19 @@ process.env.MONGODB_DB ??= "flowlet_dev";
 
 const { checkPostgres, query, closePostgres } = await import("../src/db/postgres");
 const { closeMongo } = await import("../src/db/mongo");
-const { MongoMemoryServer } = await import("mongodb-memory-server");
 const { MongoClient } = await import("mongodb");
 const { randomUUID } = await import("node:crypto");
-const { join } = await import("node:path");
-const { mkdir } = await import("node:fs/promises");
 
 /**
- * mongodb-memory-server puts its data directory in os.tmpdir() by
- * default. On this VM /tmp is a 512 MB tmpfs and a mongod data directory
- * needs ~200 MB, so parallel test files exhaust it. Point the data
- * directory at the repo's (gitignored) .dev folder on the main disk
- * instead, with a unique suffix per instance.
- *
- * Two gotchas: the option is dbPath (capital P — lowercase dbpath is
- * silently ignored), and the directory must already exist.
+ * MongoDB comes from test/setup.ts (loaded via --preload): one shared
+ * in-memory server for the whole suite, already pointed at by
+ * MONGODB_URI. This file used to start a second server of its own,
+ * which raced the shared MongoClient singleton and could try to
+ * download a second server binary — now it reuses the shared one,
+ * with a unique database name per test so nothing leaks between files.
  */
-async function startMemoryServer(): Promise<InstanceType<typeof MongoMemoryServer>> {
-  const dbPath = join(import.meta.dir, "..", ".dev", `mongo-mem-${randomUUID()}`);
-  await mkdir(dbPath, { recursive: true });
-  return MongoMemoryServer.create({ instance: { dbPath } });
-}
+const MONGO_URI =
+  process.env.MONGODB_URI ?? "mongodb://localhost:27017/flowlet_dev";
 
 test("postgres: liveness check and round-trip", async () => {
   expect(await checkPostgres()).toBe("ok");
@@ -49,20 +41,20 @@ test("postgres: liveness check and round-trip", async () => {
 });
 
 test(
-  "mongo: in-memory server round-trip",
+  "mongo: shared in-memory server round-trip",
   async () => {
-    const server = await startMemoryServer();
+    const dbName = `flowlet_probe_${randomUUID().replaceAll("-", "")}`;
+    const client = new MongoClient(MONGO_URI);
     try {
-      const client = new MongoClient(server.getUri());
       await client.connect();
-      const db = client.db("flowlet_probe");
+      const db = client.db(dbName);
       const col = db.collection<{ _id: string; note: string }>("probe");
       await col.insertOne({ _id: "p1", note: "hello" });
       const doc = await col.findOne({ _id: "p1" });
       expect(doc?.note).toBe("hello");
-      await client.close();
     } finally {
-      await server.stop();
+      await client.db(dbName).dropDatabase().catch(() => undefined);
+      await client.close();
     }
     await closeMongo();
   },
