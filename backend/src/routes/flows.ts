@@ -18,7 +18,9 @@ function originOf(req: Request): string {
 function requireFlowId(params: Record<string, string>): string {
   const id = params.id;
   if (!isFlowId(id)) {
-    throw validationError("Flow id is not valid");
+    // A malformed id names no flow, so it is a 404 like any unknown
+    // id — not a 400 about the request body.
+    throw notFound("Flow not found");
   }
   return id;
 }

@@ -27,7 +27,9 @@ export const hookRoutes: Route[] = [
     handler: async (req, params) => {
       const flowId = params.flowId;
       if (!isFlowId(flowId)) {
-        throw validationError("Flow id is not valid");
+        // A malformed id names no flow, so it is a 404 like any
+        // unknown id — not a 400 about the request body.
+        throw notFound("Flow not found");
       }
       const flow = await getFlowDoc(flowId);
       if (!flow) throw notFound("Flow not found");
@@ -45,9 +47,9 @@ export const hookRoutes: Route[] = [
       } catch {
         throw validationError("Request body is not valid JSON");
       }
-      if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
-        throw validationError("Request body must be a JSON object");
-      }
+      // Any JSON value is a valid event — an object, an array, or a
+      // scalar. Steps read what they need from it via dot paths; a
+      // filter on a missing field simply does not match.
 
       if (!flow.enabled) {
         throw conflict("Flow is disabled");

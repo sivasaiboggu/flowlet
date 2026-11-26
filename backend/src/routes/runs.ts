@@ -33,7 +33,7 @@ export const runRoutes: Route[] = [
     pattern: ["api", "flows", ":id", "runs"],
     handler: async (req, params) => {
       const id = params.id;
-      if (!isFlowId(id)) throw validationError("Flow id is not valid");
+      if (!isFlowId(id)) throw notFound("Flow not found");
       const flow = await getFlowDoc(id);
       if (!flow) throw notFound("Flow not found");
       const search = new URL(req.url).searchParams;
@@ -73,7 +73,7 @@ export const runRoutes: Route[] = [
     pattern: ["api", "flows", ":id", "stats"],
     handler: async (_req, params) => {
       const id = params.id;
-      if (!isFlowId(id)) throw validationError("Flow id is not valid");
+      if (!isFlowId(id)) throw notFound("Flow not found");
       const flow = await getFlowDoc(id);
       if (!flow) throw notFound("Flow not found");
       const stats = await getFlowStats(id);
