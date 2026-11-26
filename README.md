@@ -26,6 +26,36 @@ Ctrl-C. The backend also answers `GET /health` and `GET /health/db`
 
 `.env.example` holds placeholders only. Never commit `.env`.
 
+## Screenshots
+
+Screenshots of the running app with the demo flow ("High value orders"),
+taken 26 Nov 2026.
+
+![Flows list](preview/flows-desktop.png)
+
+*The flows list — the demo flow's latest run shows as Filtered.*
+
+![Flows list on a phone](preview/flows-mobile.png)
+
+*The same list at 375 px wide — the Created column is hidden at this
+width so nothing scrolls sideways.*
+
+![Flow page](preview/flow-detail.png)
+
+*A flow's page: webhook URL and secret, a ready-to-copy curl example,
+and the run summary (2 runs: 1 success, 1 filtered).*
+
+![Run timeline](preview/run-timeline.png)
+
+*A run's step-by-step timeline: the 4999 order passes the filter, is
+transformed to `{orderId, total, email}`, and the http_request returns
+200.*
+
+![New flow form](preview/flows-new.png)
+
+*The new-flow form, with the first step (a filter on `order.amount`)
+filled in.*
+
 ## How the code is organised
 
 ```
@@ -95,9 +125,9 @@ Design decisions worth knowing:
   reorder, a ready-to-copy curl example, a "Send test event" box that
   signs with the flow secret, run history with a status filter and
   pagination, and a per-run step timeline. Usable at 375 px wide.
-- 28 tests (`bun test`): filter operators, transform mapping, signature
-  verification (5 cases), and 13 API tests that call the endpoints for
-  real, including the brief's example end to end.
+- 36 tests (`bun test`): filter operators, transform mapping, signature
+  verification, and API tests that call the endpoints for real,
+  including the brief's example end to end.
 - The brief's example verified with curl: amount 4999 → a success run
   with three steps, the last step's input exactly
   `{orderId: "ORD-1042", total: 4999, email: "asha@example.com"}`;
@@ -114,11 +144,10 @@ Design decisions worth knowing:
 
 - **Screen recording** (3–5 min): recorded after the app is complete,
   before the submission email goes out.
-- **GitHub repository**: not created yet, nothing pushed. The repo will
-  be public; the parent (Siva) creates it and pushes after this
-  verification.
-- **Codex review pass**: Siva specified his ChatGPT account
-  `venomisay@gmail.com` for the review. It has not happened yet.
+- **Codex review fixes**: the review (25 Nov, ChatGPT Plus) found real
+  bugs; the fixes were re-implemented locally and verified (36/36 tests),
+  and are in the repo. The review's own branch could not be pushed
+  (same access issue as below, since resolved).
 
 ## Known bugs and limits
 
@@ -143,7 +172,7 @@ Design decisions worth knowing:
 
 ## Hours spent
 
-About 3 hours 30 minutes of work so far, and still in
+About 4 hours 45 minutes of work so far, and still in
 progress — the running log is in [HOURS.md](HOURS.md). The final
 number goes in the submission email once the work stops.
 
@@ -153,9 +182,12 @@ number goes in the submission email once the work stops.
   frontend, migrations, tests, and this README. Every file was written
   to be explainable line by line; Siva has to walk through the code and
   change it live in the interview, so nothing was left as a black box.
-- **ChatGPT Plus / Codex review** — not used yet. Siva specified the
-  account `venomisay@gmail.com` for the review pass; it is still to
-  happen.
+- **ChatGPT Plus / Codex review** — used 25 Nov for a review pass
+  (arjun account; the `venomisay@gmail.com` sign-in Siva specified
+  failed). The review found real bugs (missing CORS, a signature
+  mismatch, unrecorded steps on HTTP failure, filter/transform edge
+  cases); the fixes were re-implemented locally and verified, and are
+  in the repo.
 - No other AI tools were used.
 
 ## Questions
