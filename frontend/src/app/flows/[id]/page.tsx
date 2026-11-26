@@ -61,6 +61,10 @@ export default function FlowDetailPage() {
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [sending, setSending] = useState(false);
   const [toggling, setToggling] = useState(false);
+  // The secret is hidden on screen until the user asks to see it, so a
+  // screenshot or a glance at the page never gives it away. Copy
+  // buttons always copy the real value, and signing still uses it.
+  const [showSecret, setShowSecret] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -161,8 +165,11 @@ export default function FlowDetailPage() {
     );
   }
 
+  const shownSecret = showSecret
+    ? flow.secret
+    : `${flow.secret.slice(0, 8)}…`;
   const curlExample = [
-    `SECRET='${flow.secret}'`,
+    `SECRET='${shownSecret}'`,
     `BODY='${JSON.stringify({ event: "order.created", order: { id: "ORD-1042", amount: 4999 } })}'`,
     `SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $NF}')`,
     `curl -X POST "${flow.webhookUrl}" \\`,
@@ -170,6 +177,9 @@ export default function FlowDetailPage() {
     `  -H "X-Flowlet-Signature: sha256=$SIG" \\`,
     `  -d "$BODY"`,
   ].join("\n");
+  // What the Copy button copies: the same example with the real secret,
+  // so it runs as-is. What the page shows is the masked version above.
+  const curlExampleReal = curlExample.replace(shownSecret, flow.secret);
 
   return (
     <>
@@ -208,16 +218,25 @@ export default function FlowDetailPage() {
         </div>
         <div className="kv">
           <span>Secret</span>
-          <code className="mono">{flow.secret}</code>
-          <CopyButton text={flow.secret} label="Copy secret" />
+          <code className="mono">{shownSecret}</code>
+          <span className="step-actions">
+            <button
+              className="btn"
+              type="button"
+              onClick={() => setShowSecret((v) => !v)}
+            >
+              {showSecret ? "Hide" : "Show"}
+            </button>
+            <CopyButton text={flow.secret} label="Copy secret" />
+          </span>
         </div>
         <h3 className="subhead">Curl example</h3>
         <pre className="pre">{curlExample}</pre>
         <p className="hint">
-          The secret is filled in above — copy the example and run it
-          as-is. The backend runs at {apiUrl()}.
+          The secret is hidden on screen — use Show to see it, or copy
+          the example and run it as-is. The backend runs at {apiUrl()}.
         </p>
-        <CopyButton text={curlExample} label="Copy curl example" />
+        <CopyButton text={curlExampleReal} label="Copy curl example" />
       </section>
 
       <section className="card">
