@@ -143,7 +143,7 @@ Design decisions worth knowing:
 
 ## Hours spent
 
-About 1 hour 30 minutes of continuous work so far, and still in
+About 3 hours 30 minutes of work so far, and still in
 progress — the running log is in [HOURS.md](HOURS.md). The final
 number goes in the submission email once the work stops.
 
@@ -162,59 +162,43 @@ number goes in the submission email once the work stops.
 
 ### Why do flows fit MongoDB and runs fit PostgreSQL? Would you have chosen differently?
 
-A flow is a small document with a variable shape: its steps are a short
-list, and each step type carries different fields, so a schemaless
-document fits without joins or a step-type table. Flows are read by id
-or as a newest-first list, both of which MongoDB does well. Runs are the
-opposite: append-only, tabular, and relational — a run has many step
-records, and the questions asked of them are aggregations (stats) and
-ordered, paginated reads, which SQL and indexes answer directly. I
-would not choose differently for this size; if flows ever needed
-transactions or cross-flow queries, PostgreSQL would be the better home
-for them too.
+A flow is a small document with a variable shape — its steps are a short
+list and each step type carries different fields — so a schemaless document
+fits without joins or a step-type table. Runs are append-only, tabular and
+relational, and the questions asked of them are aggregations and ordered,
+paginated reads, which SQL answers directly. I would not choose differently.
 
 ### Which indexes did you create, and which query does each one serve?
 
-MongoDB: `{createdAt: -1}` on the flows collection serves
-`GET /api/flows`, which lists flows newest first with a projection and a
-limit. PostgreSQL: `idx_runs_flow_started (flow_id, started_at DESC,
-id DESC)` serves `GET /api/flows/:id/runs` — filter by flow, newest
-first, with cursor pagination on `(started_at, id)`. And
-`idx_run_steps_run (run_id, position)` serves `GET /api/runs/:runId`,
-which fetches one run's steps in position order.
+MongoDB: `{createdAt: -1}` on flows serves `GET /api/flows`, the newest-first
+list. PostgreSQL: `idx_runs_flow_started (flow_id, started_at DESC, id DESC)`
+serves `GET /api/flows/:id/runs` — filter by flow, newest first, with cursor
+pagination on `(started_at, id)`; `idx_run_steps_run (run_id, position)`
+serves `GET /api/runs/:runId`, fetching one run's steps in position order.
 
 ### What happens if the same event is delivered twice?
 
-It is delivered twice, and Flowlet runs it twice. Each delivery is
-verified and executed on its own, so a second identical event creates a
-second run with the same payload, and if the flow posts to another
-system, that system sees the event twice. There is no deduplication:
-the `X-Event-Id` extra was not built. If a receiver must be idempotent
-it should key on something inside the payload itself, such as the order
-id, rather than on the delivery.
+It is delivered twice, and Flowlet runs it twice: a second identical event
+creates a second run with the same payload, and if the flow posts to another
+system, that system sees the event twice. There is no deduplication — the
+`X-Event-Id` extra was not built. A receiver that must be idempotent should
+key on something inside the payload itself, such as the order id.
 
 ### What happens to the run history when a flow is deleted? Why did you choose that?
 
-The runs stay. A run's `flow_id` is a plain text field — there is no
-foreign key from PostgreSQL into MongoDB, because a foreign key cannot
-point across databases — and each run also snapshots the flow name, so
-it stays readable after the flow is gone. Only the step records are
-tied to their run (`run_steps.run_id REFERENCES runs(id) ON DELETE
-CASCADE`). I chose this because run history is an audit trail: deleting
-a flow should not rewrite what happened, and a user debugging a past
-delivery needs the run even after the flow that produced it is gone.
+The runs stay. A run's `flow_id` is plain text — no foreign key can point
+from PostgreSQL into MongoDB — and each run snapshots the flow name, so it
+stays readable after the flow is gone. Only step records are tied to their
+run (`run_steps.run_id REFERENCES runs(id) ON DELETE CASCADE`); history is
+an audit trail, and deleting a flow should not rewrite what happened.
 
 ### If this service received 100 events per second, what would break first, and what would you change?
 
-The request path would break first. Steps run synchronously inside the
-webhook request, so each event holds a connection open while its
-`http_request` steps wait on a downstream system — up to 5 seconds each
-— and slow receivers would pile up requests until the server ran out of
-connections. The PostgreSQL pool would be next. I would move execution
-off the request path: accept the event, write the run as pending, and
-hand it to a worker queue, with a cap on concurrent outbound calls and
-a circuit breaker per target. Reads are already safe: the run list is
-paginated and indexed, and stats come from one SQL query.
+The request path would break first. Steps run synchronously inside the webhook request,
+so each event holds a connection open while its `http_request` steps wait on a downstream
+system — up to 5 seconds each — and slow receivers would pile up requests until the server
+ran out of connections. I would move execution off the request path: accept the event,
+write the run as pending, and hand it to a worker queue with a cap on concurrent calls.
 
 ## Submitting
 
