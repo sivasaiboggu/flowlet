@@ -43,7 +43,7 @@ the repo root: `bun run migrate`, `bun run dev`, `bun test`.
   indexes the run-list and run-detail queries use. Runs are not deleted
   when a flow is deleted: `runs.flow_id` is plain text (no foreign key
   can point into MongoDB) and each run snapshots the flow name.
-- `test/` — `bun test` (28 tests). `setup.ts` is loaded with
+- `test/` — `bun test` (42 tests). `setup.ts` is loaded with
   `--preload` and starts one shared in-memory MongoDB for the whole
   suite; the backend keeps a single MongoClient per process, configured
   at import time, so each test file starting its own server would race
@@ -55,9 +55,12 @@ the repo root: `bun run migrate`, `bun run dev`, `bun test`.
 There is no Docker daemon here, so `docker compose up -d` was not run
 locally. Instead:
 
-- PostgreSQL 16 is installed system-wide. Start the cluster and create
-  the dev database:
-  `pg_ctlcluster 16 main start`
+- PostgreSQL 16 lives in `~/pg` (the system install was wiped by a VM
+  rebuild). Start it as the data-dir owner (uid 1000) after allowing
+  traversal of the home dir:
+  `chmod o+x /home/hatch`
+  `setpriv --reuid=1000 --regid=1000 --clear-groups env LD_LIBRARY_PATH=/home/hatch/pg/usr/lib/x86_64-linux-gnu /home/hatch/pg/usr/lib/postgresql/16/bin/pg_ctl -D /home/hatch/pg-data -l /home/hatch/pg-log/server.log -o "-p 5432 -k /tmp" start`
+  Then check it with:
   `psql "postgresql://flowlet:flowlet_dev@localhost:5432/flowlet_dev" -c "SELECT 1"`
 - MongoDB has no server installed. Tests use `mongodb-memory-server`,
   which downloads a real `mongod` binary once (cached in
