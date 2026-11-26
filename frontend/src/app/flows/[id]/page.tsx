@@ -57,6 +57,8 @@ export default function FlowDetailPage() {
   const [testJson, setTestJson] = useState(TEST_EVENT_EXAMPLE);
   const [testResult, setTestResult] = useState<{ runId: string; status: string } | null>(null);
   const [testError, setTestError] = useState("");
+  const [refreshNote, setRefreshNote] = useState("");
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [sending, setSending] = useState(false);
   const [toggling, setToggling] = useState(false);
 
@@ -100,32 +102,41 @@ export default function FlowDetailPage() {
     setSending(true);
     setTestResult(null);
     setTestError("");
-    let parsed: unknown;
+    setRefreshNote("");
     try {
-      parsed = JSON.parse(testJson);
+      JSON.parse(testJson);
     } catch {
       setTestError("The test event is not valid JSON.");
       setSending(false);
       return;
     }
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      setTestError("The test event must be a JSON object.");
-      setSending(false);
-      return;
-    }
+    // Any JSON value is a valid event — an object, an array, or a
+    // scalar — so there is nothing more to check here; the backend
+    // validates the signature and runs the steps.
+    let result: { runId: string; status: string };
     try {
-      const result = await sendTestEvent(flow, testJson);
-      setTestResult(result);
-      // Refresh the summary numbers and the run table below.
-      const fresh = await getStats(flow.id);
-      setStats(fresh);
+      result = await sendTestEvent(flow, testJson);
     } catch (err) {
       setTestError(
         err instanceof ApiError ? err.message : "Could not send the test event.",
       );
-    } finally {
       setSending(false);
+      return;
     }
+    setTestResult(result);
+    setSending(false);
+    // The send succeeded. Refresh the summary numbers and the run
+    // history below — a refresh failure is not a send failure, so it
+    // only shows a note and never replaces the result above.
+    try {
+      const fresh = await getStats(flow.id);
+      setStats(fresh);
+    } catch {
+      setRefreshNote(
+        "The test event was sent, but the summary could not be refreshed.",
+      );
+    }
+    setHistoryRefreshKey((key) => key + 1);
   }
 
   if (loading) return <Loading label="Loading flow…" />;
@@ -151,6 +162,7 @@ export default function FlowDetailPage() {
   }
 
   const curlExample = [
+    `SECRET='${flow.secret}'`,
     `BODY='${JSON.stringify({ event: "order.created", order: { id: "ORD-1042", amount: 4999 } })}'`,
     `SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $NF}')`,
     `curl -X POST "${flow.webhookUrl}" \\`,
@@ -202,8 +214,8 @@ export default function FlowDetailPage() {
         <h3 className="subhead">Curl example</h3>
         <pre className="pre">{curlExample}</pre>
         <p className="hint">
-          Set SECRET to the secret above before running it. The backend runs
-          at {apiUrl()}.
+          The secret is filled in above — copy the example and run it
+          as-is. The backend runs at {apiUrl()}.
         </p>
         <CopyButton text={curlExample} label="Copy curl example" />
       </section>
@@ -279,11 +291,12 @@ export default function FlowDetailPage() {
             <Link href={`/runs/${testResult.runId}`}>view the run</Link>
           </p>
         )}
+        {refreshNote && <p className="notice">{refreshNote}</p>}
       </section>
 
       <section className="card">
         <h2>Run history</h2>
-        <RunTable flowId={flow.id} />
+        <RunTable flowId={flow.id} refreshKey={historyRefreshKey} />
       </section>
     </>
   );
