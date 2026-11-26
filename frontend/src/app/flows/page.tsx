@@ -6,7 +6,11 @@ import { ApiError, listFlows, listRuns } from "@/lib/api";
 import type { FlowSummary } from "@/lib/types";
 import { EmptyState, ErrorState, Loading } from "@/components/StateViews";
 
-type Row = FlowSummary & { latestStatus: string | null };
+type Row = FlowSummary & {
+  /** Latest run status, null when the flow has no runs, "unavailable"
+   * when the run list could not be loaded at all. */
+  latestStatus: "success" | "failed" | "filtered" | null | "unavailable";
+};
 
 export default function FlowsPage() {
   const [rows, setRows] = useState<Row[]>([]);
@@ -27,7 +31,9 @@ export default function FlowsPage() {
               latestStatus: page.items[0]?.status ?? null,
             };
           } catch {
-            return { ...flow, latestStatus: null };
+            // The flow list loaded but this flow's run list did not —
+            // that is not the same as "no runs".
+            return { ...flow, latestStatus: "unavailable" };
           }
         }),
       );
@@ -73,7 +79,7 @@ export default function FlowsPage() {
                   <th>Name</th>
                   <th>Enabled</th>
                   <th>Latest run</th>
-                  <th>Created</th>
+                  <th className="col-created">Created</th>
                 </tr>
               </thead>
               <tbody>
@@ -96,8 +102,16 @@ export default function FlowsPage() {
                       {flow.latestStatus === null && (
                         <span className="muted">No runs</span>
                       )}
+                      {flow.latestStatus === "unavailable" && (
+                        <span
+                          className="muted"
+                          title="The latest run could not be loaded"
+                        >
+                          Unknown
+                        </span>
+                      )}
                     </td>
-                    <td className="num">
+                    <td className="num col-created">
                       {new Date(flow.createdAt).toLocaleDateString()}
                     </td>
                   </tr>
