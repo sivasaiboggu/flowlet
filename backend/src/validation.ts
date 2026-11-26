@@ -136,13 +136,21 @@ function validateSteps(
         return;
       }
       let bad = false;
-      for (const [outKey, dotPath] of Object.entries(raw.mapping)) {
+      // Error keys are by row index (steps.0.mapping.0.path), the same
+      // keys the frontend uses to show each message next to its field.
+      // Keying by the output name instead meant the message never
+      // appeared anywhere.
+      Object.entries(raw.mapping).forEach(([outKey, dotPath], j) => {
+        if (!outKey.trim()) {
+          errors[`${base}.mapping.${j}.outKey`] = "Output field name is required";
+          bad = true;
+        }
         if (typeof dotPath !== "string" || !DOT_PATH.test(dotPath)) {
-          errors[`${base}.mapping.${outKey}`] =
+          errors[`${base}.mapping.${j}.path`] =
             "Each mapping value must be a dot path like order.id";
           bad = true;
         }
-      }
+      });
       if (!bad) {
         steps.push({
           type: "transform",

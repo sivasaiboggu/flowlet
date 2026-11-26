@@ -236,7 +236,11 @@ export async function runSteps(
 
     if (step.type === "transform") {
       const started = performance.now();
-      const next: { [key: string]: JsonValue } = {};
+      // A plain object would swallow "__proto__" as an output name:
+      // assigning to it changes the prototype instead of storing the
+      // value, so the field would silently vanish from the run. A
+      // null-prototype object stores every name as a real key.
+      const next: { [key: string]: JsonValue } = Object.create(null);
       for (const [outKey, dotPath] of Object.entries(step.mapping)) {
         const value = getValueAtPath(data, dotPath);
         next[outKey] = value === undefined ? null : (value as JsonValue);
