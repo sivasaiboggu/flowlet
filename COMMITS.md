@@ -136,3 +136,10 @@ Files:
 - Tests: 36 pass, 0 fail (was 28; +8 from the Codex fixes).
 - Screenshots in README: five fresh live screenshots of the running app with the demo flow (flows list desktop + mobile, flow detail, run timeline, new flow) under `preview/`, embedded in README.md. The demo webhook secret is redacted in the flow-detail screenshot before publishing.
 - Hours updated to about 4 hours 45 minutes (see HOURS.md).
+
+## Fix-up (26 Nov 2026, after submission)
+
+- 7 bugs fixed and verified live: transform `__proto__` output key dropped (now `Object.create(null)` in engine + form), empty transform output names rejected, mapping error keys index-based to match the frontend, webhook body capped at 1 MB (400), NUL in an event answered 400 with no run (was 500), flow secret masked on screen with Show/Hide (copy still works).
+- 6 new tests: 42 pass, 0 fail. Both typechecks, migration, production build, worked example re-verified live.
+- README rewritten in plain words; "AI tools used" section and the five questions kept exactly as they were; "What is not finished" removed (recording dropped by decision, submission sent); Known bugs renamed "Limits". Hours now about 5 hours 45 minutes.
+- flow-detail.png retaken with the masked secret.

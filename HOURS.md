@@ -35,3 +35,11 @@ after the screen recording, the Codex review and the repo push are done.
 | ~15:55 – ~16:35 | Server restart after the VM rebuild (PostgreSQL recovered — its data dir is owned by a uid that no longer exists, so it was started as uid 1000 via setpriv after allowing traversal of the home dir; MongoDB and dev servers restarted, demo data intact: 2 runs), fresh live screenshots of the running app, Screenshots section added to the README. | ~40 min |
 
 Added 26 Nov: ~1 h 15 min of real work (waiting time not counted). New provisional total: **about 4¾ hours**.
+
+## 26 Nov fix-up (added 26 Nov evening)
+
+| When (IST, 26 Nov) | What | Approx. |
+|---|---|---|
+| ~16:26 – ~17:20 | Bug fix + README rewrite: transform `__proto__` output names kept as real fields (engine + form), empty transform output names rejected, mapping errors re-keyed by row index so they show next to the right field, webhook body capped at 1 MB, NUL characters in an event answered with a clear 400 instead of a 500 with no run, flow secret hidden on the flow page until Show is tapped (copy still works). 6 new tests (42 pass, 0 fail), both typechecks, migration, production build, worked example re-verified live, flow-detail screenshot retaken with the masked secret. README rewritten in plain words; the "AI tools used" section and the five questions kept as they were. | ~1 h |
+
+New total: **about 5 hours 45 minutes** (4¾ h + ~1 h fix-up).
