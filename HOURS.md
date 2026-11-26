@@ -16,3 +16,22 @@ the wall-clock span of continuous work, and it is still running.
 **Running total: about 1 hour 55 minutes so far, work not finished.**
 The final number goes in the submission email once the work stops —
 after the screen recording, the Codex review and the repo push are done.
+
+## After 01:30 IST, 25 Nov (added 26 Nov morning — provisional, Siva to confirm)
+
+| When (IST, 25 Nov) | What | Approx. |
+|---|---|---|
+| ~03:00 – ~03:40, ~11:00 – ~13:00, ~17:45 – ~19:05, ~19:39 – ~20:10, ~22:24 – ~22:55 | Repo creation + pushing steps 01–08 (manifests, secret scans, read-back verification after each push) and three retry attempts for steps 09–10, each with full pre-checks. Waiting on approval taps is NOT counted. | ~1 h |
+| ~23:29 – ~23:53 | ChatGPT Plus (Codex, arjun account) review pass: setup, brief, review of main at b458406, fixes committed as f5f8978 (31/31 tests pass). Fixes not pushed — same GitHub 403. | ~30 min |
+
+**Provisional total: about 4¾ hours** (1 h 55 m build + ~1 h pushing/verification + ~30 min Codex review + ~1 h 15 m on 26 Nov — polish, steps 09–13 push, restart/screenshots/README; see below). Siva to confirm the final figure before it goes in the submission email — he has to be able to explain it in the video call.
+
+## 26 Nov (added 26 Nov afternoon — provisional, Siva to confirm)
+
+| When (IST, 26 Nov) | What | Approx. |
+|---|---|---|
+| ~11:20 – ~11:51 | Polish pass (step 13): responsive tables at ≤640 px, flow list limit 100, README answers trimmed to 5 lines each; re-verified 36/36 tests, both typechecks, migration, 375 px overflow probe. | ~15 min |
+| ~12:37 – ~13:25 | Steps 09–13 pushed to GitHub via the browser web UI (the GitHub App's write access was returning 403), verified by read-back: 23 commits total on main. Waiting on Siva's GitHub sign-in is NOT counted. | ~20 min |
+| ~15:55 – ~16:35 | Server restart after the VM rebuild (PostgreSQL recovered — its data dir is owned by a uid that no longer exists, so it was started as uid 1000 via setpriv after allowing traversal of the home dir; MongoDB and dev servers restarted, demo data intact: 2 runs), fresh live screenshots of the running app, Screenshots section added to the README. | ~40 min |
+
+Added 26 Nov: ~1 h 15 min of real work (waiting time not counted). New provisional total: **about 4¾ hours**.

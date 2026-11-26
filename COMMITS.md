@@ -129,3 +129,10 @@ Files:
 
 - `backend/test/health.test.ts`, `backend/test/db.test.ts` (fallback password `CHANGE_ME` → `flowlet_dev`, matching `api.test.ts` and `.env.example`; `health.test.ts` runs first and its `CHANGE_ME` value was locking the shared pool, so `bun test` failed 2 tests + 1 error in a clean run — now 28 pass, 0 fail, with no explicit env)
 - `.env` (local dev values only, gitignored: `NEXT_PUBLIC_API_URL` `http://localhost:3001` → `http://localhost:4000`; the 3001 value would have made the UI call a dead port)
+
+## After step 10 — pushes and polish (26 Nov 2026)
+
+- Steps 09–13 pushed to GitHub main via the browser web UI (23 commits total, head `6809185`): CI workflow, test fixes, README hours, Codex review fixes (9 directory-grouped commits), polish (mobile table columns, `limit=100`, README answers trimmed to 5 lines each). Verified by read-back.
+- Tests: 36 pass, 0 fail (was 28; +8 from the Codex fixes).
+- Screenshots in README: five fresh live screenshots of the running app with the demo flow (flows list desktop + mobile, flow detail, run timeline, new flow) under `preview/`, embedded in README.md. The demo webhook secret is redacted in the flow-detail screenshot before publishing.
+- Hours updated to about 4 hours 45 minutes (see HOURS.md).
