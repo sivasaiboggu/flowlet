@@ -19,6 +19,34 @@ export function json(data: unknown, status = 200): Response {
   });
 }
 
+/**
+ * Cross-origin support for the local frontend. In development the web
+ * app runs on :3000 and the API on :4000, so browser calls are
+ * cross-origin and need these headers; without them the browser blocks
+ * every API response. Only the local frontend origins are allowed.
+ */
+const ALLOWED_ORIGINS = new Set([
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+]);
+
+export function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("Origin");
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) return {};
+  return { "Access-Control-Allow-Origin": origin, Vary: "Origin" };
+}
+
+/** Attach the CORS headers for this request to a response. */
+export function withCors(
+  res: Response,
+  headers: Record<string, string>,
+): Response {
+  for (const [name, value] of Object.entries(headers)) {
+    res.headers.set(name, value);
+  }
+  return res;
+}
+
 /** Every error response uses the brief's shape: { error: { code, message, details } }. */
 export function error(err: ApiError): Response {
   return json(errorBody(err), err.status);
