@@ -56,7 +56,10 @@ const MAX_BODY_BYTES = 1_000_000;
 
 export async function readJsonBody(req: Request): Promise<unknown> {
   const text = await req.text();
-  if (text.length > MAX_BODY_BYTES) {
+  // Byte length, not string length: a body of multi-byte characters
+  // (é, emoji, CJK) can hold far more than 1 MB of bytes in under
+  // 1,000,000 UTF-16 code units, so text.length would let it through.
+  if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) {
     throw validationError("Request body too large");
   }
   if (!text.trim()) return null;

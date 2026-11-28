@@ -143,3 +143,23 @@ Files:
 - 6 new tests: 42 pass, 0 fail. Both typechecks, migration, production build, worked example re-verified live.
 - README rewritten in plain words; "AI tools used" section and the five questions kept exactly as they were; "What is not finished" removed (recording dropped by decision, submission sent); Known bugs renamed "Limits". Hours now about 5 hours 45 minutes.
 - flow-detail.png retaken with the masked secret.
+
+## Upgrade round (28 Nov 2026, after submission)
+
+- 1 bug fixed: the JSON body cap counted characters, not bytes, so a
+  body of multi-byte characters could pass the 1 MB cap with over 1 MB
+  of UTF-8 behind it (`Buffer.byteLength` in `readJsonBody`). 1 new test:
+  43 pass, 0 fail. Both typechecks, production build pass.
+- Deps updated: mongodb 6.22.0 -> 7.9.1, mongodb-memory-server 10.4.3 ->
+  11.4.0 (paired: v11 ships its own driver 7 and a mongod 8.2 binary),
+  @types/node 22.20.5 -> 22.20.7, @types/react 19.3.1 -> 19.3.3.
+  No code changes were needed for the driver upgrade.
+- `bun test` from the repo root did not run the test setup, so the
+  MongoDB tests silently fell back to localhost:27017 and only passed
+  while a local mongod happened to be running there. Added
+  `bunfig.toml` with the test preload, so plain `bun test` now starts
+  the in-memory MongoDB itself (verified: 43 pass from the root, and
+  `bun run test` still passes with no double start).
+- Not changed: Next.js 15 (v16 is a major with App Router changes),
+  TypeScript 5 (v7 is a native preview), the assignment behaviour,
+  the API, the frontend, or the README.

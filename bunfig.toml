@@ -1,0 +1,9 @@
+# Bun configuration for Flowlet.
+#
+# `bun test` from the repo root must run the test setup (one shared
+# in-memory MongoDB for the suite) — without this, the MongoDB tests
+# fall back to localhost:27017 and fail on a machine with no mongod
+# running there. The backend package script passes the same file with
+# --preload; see backend/package.json.
+[test]
+preload = ["./backend/test/setup.ts"]

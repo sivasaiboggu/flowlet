@@ -451,6 +451,25 @@ test("API: webhook rejects an oversized body with 400", async () => {
   expect(asRecord(hook.body.error).code).toBe("VALIDATION_ERROR");
 });
 
+test("API: body cap counts bytes, not characters", async () => {
+  // 600,000 "é" characters are under 1,000,000 characters but over
+  // 1,000,000 bytes in UTF-8, so a character-counted cap would let
+  // this flow through and create it. The byte-counted cap rejects it.
+  const body = JSON.stringify({
+    name: "Multi-byte body cap probe",
+    enabled: true,
+    steps: [
+      { type: "filter", field: "order.amount", operator: "gt", value: "é".repeat(600_000) },
+    ],
+  });
+  expect(body.length).toBeLessThan(1_000_000);
+  expect(Buffer.byteLength(body, "utf8")).toBeGreaterThan(1_000_000);
+  const { status, body: res } = await api("POST", "/api/flows", body);
+  expect(status).toBe(400);
+  expect(asRecord(res.error).code).toBe("VALIDATION_ERROR");
+  expect(asRecord(res.error).message).toBe("Request body too large");
+});
+
 test("API: webhook rejects a NUL character with 400 and records no run", async () => {
   const before = await api("GET", `/api/flows/${flowId}/stats`);
   const totalBefore = before.body.total as number;
